@@ -9,7 +9,9 @@
 import UIKit
 
 extension UILabel {
+    
     var adjustFontToRealIPhoneSize: Bool {
+       
         set {
             if newValue {
                 var currentFont = self.font
@@ -31,4 +33,5 @@ extension UILabel {
             return false
         }
     }
+    
 }

@@ -51,7 +51,7 @@ class DBManager: NSObject {
     
     需要创建数据库表，则需要创建类继承BaseDao，并复写createTable方法，然后在该initDB方法里面的tables变量中，添加需要创建表的类
     */
-    func initDB()
+    func initDatabase()
     {
         if(isDatabaseInitialized()){
             println("数据库已经初始化: \(databasePath())")
@@ -85,8 +85,9 @@ class DBManager: NSObject {
         
     }
     
-    
-    /// 数据库是否已经初始化
+    /**
+        数据库是否已经初始化
+    */
     func isDatabaseInitialized() -> Bool
     {
         var userDefaults = NSUserDefaults.standardUserDefaults()
@@ -94,7 +95,9 @@ class DBManager: NSObject {
         return isDatabaseInitialized
     }
     
-    /// 设置数据库是否已经初始化
+    /**
+        设置数据库是否已经初始化
+    */
     func setDatabaseInitialized(isDatabaseInitialized:Bool)
     {
         var userDefaults = NSUserDefaults.standardUserDefaults()
@@ -190,9 +193,18 @@ class DBManager: NSObject {
         return executeSuccess
     }
     
+    /**
+    查询数据库
     
-    func executeQuery(sql:String!, args:NSArray!,onQueried:(resultSet:FMResultSet?,error:NSError?)->Void)
+    :param: sql  查询SQL
+    :param: args 查询SQL的条件值
+    
+    :returns: （查询结果,错误）
+    */
+    func executeQuery(sql:String!, args:NSArray!) -> ([[NSObject:AnyObject]]?,error:NSError?)
     {
+        var resultDictArray : [[NSObject:AnyObject]]?
+        var error : NSError?
         
         writeQueueLock.lock()
         
@@ -204,37 +216,21 @@ class DBManager: NSObject {
             if resultSet == nil
             {
                 println("执行SQL:\(sql) 参数:\(args) 报错信息:\(db.lastErrorMessage())")
-                onQueried(resultSet: nil, error:db.lastError())
+                error = db.lastError()
             }else{
-                onQueried(resultSet: resultSet,error:nil)
+                
+                resultDictArray = [[NSObject:AnyObject]]()
+                
+                while resultSet.next()
+                {
+                    resultDictArray!.append(resultSet.resultDictionary())
+                }
             }
             resultSet.close()
         }
         writeQueueLock.unlock()
-    }
-    
-    func executeQuery(sql:String!,onQueried:(resultSet:FMResultSet?,error:NSError?)->Void){
-        executeQuery(sql, args: [], onQueried: onQueried)
-    }
-
-    
-    func executeQuery(inTransaction :(db:FMDatabase) -> Bool) -> Bool
-    {
-        var executeSuccess = false
         
-        writeQueueLock.lock()
-        queue.inTransaction { (db, rollback) -> Void in
-            
-            executeSuccess = inTransaction(db: db)
-            
-            if !executeSuccess
-            {
-                rollback.initialize(true)
-            }
-        }
-        writeQueueLock.unlock()
-        
-        return executeSuccess
+        return (resultDictArray,error)
     }
     
 }
