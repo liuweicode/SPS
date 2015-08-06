@@ -11,29 +11,42 @@ import Alamofire
 import JSONHelper
 
 
-enum CommonResponseMessage: Int{
+let APIErrorDomain = "APIErrorDomain"
+let ResponseStatusSuccess = 0 //API接口调用成功 返回的状态 与服务器协定好是0
+
+//API错误消息
+enum APIErrorMessage : Int
+{
+    case NetworkError //网络错误
+    case SignTokenError //登录Token失效
     
-    case ok = 0                 // 操作成功
-    case sign_token_error = 1   // 登陆token失效
-    case network = -999         //网络错误
-    
-    func message() -> String
+    func getMessage() -> String
     {
-        if self.rawValue == ok.rawValue
+        switch self
         {
-            return "操作成功"
-        }else if self.rawValue == sign_token_error.rawValue
-        {
-            return "登录失效,请重新登录。"
+            case .NetworkError:
+                return "网络错误"
+            case .SignTokenError:
+                return "登录失效"
+            default:
+            return "未知错误"
         }
-        else if self.rawValue == network.rawValue
-        {
-            return "网络失败，请重试！"
-        }
-        return "未知错误"
     }
 }
 
+class APIError : NSError{
+    
+    var responseMessage : String?
+    
+    init(domain: String, code: Int, responseMessage :String?) {
+        super.init(domain: domain, code: code, userInfo: nil)
+        self.responseMessage = responseMessage
+    }
+
+    required init(coder aDecoder: NSCoder) {
+        fatalError("init(coder:) has not been implemented")
+    }
+}
 
 class BaseAPIManager: NSObject {
    
@@ -52,7 +65,7 @@ class BaseAPIManager: NSObject {
         :param: url    接口地址
         :param: params 接口参数
     */
-    class func POST(url:String,params:[String : AnyObject]?,success:(responseData:[String : AnyObject])->Void, failed:(errorCode:Int,errorMsg:String)->Void)
+    class func POST(url:String,params:[String : AnyObject]?,success:(responseData:[String : AnyObject])->Void, failed:(error:APIError)->Void)
     {
         println("请求:\(url) 参数: \(params!)")
         
@@ -64,8 +77,7 @@ class BaseAPIManager: NSObject {
                 if let e = error
                 {
                     println("接口请求失败: \(e)")
-                    
-                    failed(errorCode: CommonResponseMessage.network.rawValue, errorMsg: CommonResponseMessage.network.message())
+                    failed(error: APIError(domain: APIErrorDomain, code: APIErrorMessage.NetworkError.rawValue, responseMessage: APIErrorMessage.NetworkError.getMessage()))
                     
                 }else{
                     
@@ -75,33 +87,41 @@ class BaseAPIManager: NSObject {
                     
                     ret <-- responseData["ret"]
                     
-                    if ret == CommonResponseMessage.ok.rawValue
+                    if ret == ResponseStatusSuccess
                     {
                         success(responseData:responseData)
                         
                     }else{
-                        var msg: String?
+                        //错误消息
+                        var msg : String?
                         msg <-- responseData["msg"]
-                        failed(errorCode: ret!, errorMsg: msg!)
+                        var error : APIError!
+                        if let errorMessage = msg
+                        {
+                            error = APIError(domain: APIErrorDomain, code: ret!, responseMessage: errorMessage)
+                        }else{
+                            failed(error: APIError(domain: APIErrorDomain, code: ret!, responseMessage: nil))
+                        }
                     }
                 }
             }
         }else{
             println("无网络连接")
-            failed(errorCode: CommonResponseMessage.network.rawValue, errorMsg: CommonResponseMessage.network.message())
+            failed(error: APIError(domain: APIErrorDomain, code: APIErrorMessage.NetworkError.rawValue, responseMessage: APIErrorMessage.NetworkError.getMessage()))
         }
     }
     
     
-    class func POST(url:String,params:[String : AnyObject]?,success:(responseData:[String : AnyObject])->Void, relogin:()->Void, failed:(errorCode:Int,errorMsg:String)->Void)
+    class func POST(url:String,params:[String : AnyObject]?,success:(responseData:[String : AnyObject])->Void, relogin:()->Void, failed:(error:APIError)->Void)
     {
         POST(url, params: params, success: { (responseData) -> Void in
             success(responseData: responseData)
-        }) { (errorCode, errorMsg) -> Void in
-            if errorCode == CommonResponseMessage.sign_token_error.rawValue {
+        }) { (error) -> Void in
+            //Token失效 需要重新登录
+            if error.code == APIErrorMessage.SignTokenError.rawValue {
                 relogin()
             }else{
-                failed(errorCode: errorCode, errorMsg: errorMsg)
+                failed(error: error)
             }
         }
     }
@@ -112,7 +132,7 @@ class BaseAPIManager: NSObject {
         :param: url    接口地址
         :param: params 接口参数
     */
-    class func GET(url:String,params:[String : AnyObject],success:(responseData:[String : AnyObject])->Void, failed:(errorCode:Int,errorMsg:String)->Void)
+    class func GET(url:String,params:[String : AnyObject],success:(responseData:[String : AnyObject])->Void, failed:(error:APIError)->Void)
     {
         println("请求:\(url) 参数: \(params)")
         
@@ -125,7 +145,7 @@ class BaseAPIManager: NSObject {
                 {
                     println("接口请求失败: \(e)")
                     
-                    failed(errorCode: CommonResponseMessage.network.rawValue, errorMsg: CommonResponseMessage.network.message())
+                    failed(error: APIError(domain: APIErrorDomain, code: APIErrorMessage.NetworkError.rawValue, responseMessage: APIErrorMessage.NetworkError.getMessage()))
                     
                 }else{
                     
@@ -135,20 +155,27 @@ class BaseAPIManager: NSObject {
                     
                     ret <-- responseData["ret"]
                     
-                    if ret == CommonResponseMessage.ok.rawValue
+                    if ret == ResponseStatusSuccess
                     {
                         success(responseData:responseData)
                         
                     }else{
-                        var msg: String?
+                        //错误消息
+                        var msg : String?
                         msg <-- responseData["msg"]
-                        failed(errorCode: ret!, errorMsg: msg!)
+                        var error : APIError!
+                        if let errorMessage = msg
+                        {
+                            error = APIError(domain: APIErrorDomain, code: ret!, responseMessage: errorMessage)
+                        }else{
+                            failed(error: APIError(domain: APIErrorDomain, code: ret!, responseMessage: nil))
+                        }
                     }
                 }
             }
         }else{
             println("无网络连接")
-            failed(errorCode: CommonResponseMessage.network.rawValue, errorMsg: CommonResponseMessage.network.message())
+            failed(error: APIError(domain: APIErrorDomain, code: APIErrorMessage.NetworkError.rawValue, responseMessage: APIErrorMessage.NetworkError.getMessage()))
         }
     }
     
@@ -157,7 +184,7 @@ class BaseAPIManager: NSObject {
     
         :param: fileURL 文件URL
     */
-    class func upload(url:String,fileURL:NSURL,progress:(bytesWritten:Int64, totalBytesWritten:Int64, totalBytesExpectedToWrite:Int64)->Void,success:(responseData:[String : AnyObject])->Void, failed:(errorCode:Int,errorMsg:String)->Void)
+    class func upload(url:String,fileURL:NSURL,progress:(bytesWritten:Int64, totalBytesWritten:Int64, totalBytesExpectedToWrite:Int64)->Void,success:(responseData:[String : AnyObject])->Void, failed:(error:NSError)->Void)
     {
         println("上传文件:\(url) 本地文件: \(fileURL)")
         if isHostReachabled()
@@ -175,7 +202,7 @@ class BaseAPIManager: NSObject {
                     {
                         println("接口请求失败: \(e)")
                         
-                        failed(errorCode: CommonResponseMessage.network.rawValue, errorMsg: CommonResponseMessage.network.message())
+                        failed(error: APIError(domain: APIErrorDomain, code: APIErrorMessage.NetworkError.rawValue, responseMessage: APIErrorMessage.NetworkError.getMessage()))
                         
                     }else{
                         
@@ -185,22 +212,28 @@ class BaseAPIManager: NSObject {
                         
                         ret <-- responseData["ret"]
                         
-                        if ret == CommonResponseMessage.ok.rawValue
+                        if ret == ResponseStatusSuccess
                         {
                             success(responseData:responseData)
                             
                         }else{
-                            var msg: String?
+                            //错误消息
+                            var msg : String?
                             msg <-- responseData["msg"]
-                            failed(errorCode: ret!, errorMsg: msg!)
+                            var error : APIError!
+                            if let errorMessage = msg
+                            {
+                                error = APIError(domain: APIErrorDomain, code: ret!, responseMessage: errorMessage)
+                            }else{
+                                failed(error: APIError(domain: APIErrorDomain, code: ret!, responseMessage: nil))
+                            }
                         }
                     }
             }
         }else{
             println("无网络连接")
-            failed(errorCode: CommonResponseMessage.network.rawValue, errorMsg: CommonResponseMessage.network.message())
+            failed(error: APIError(domain: APIErrorDomain, code: APIErrorMessage.NetworkError.rawValue, responseMessage: APIErrorMessage.NetworkError.getMessage()))
         }
-
     }
     
     /**
@@ -209,7 +242,7 @@ class BaseAPIManager: NSObject {
     :param: progress 进度
     :param: success  成功返回下载文件的临时地址
     */
-    class func download(url:String,progress:(bytesRead:Int64, totalBytesRead:Int64, totalBytesExpectedToRead:Int64)->Void,success:(savedPath:NSURL)->Void, failed:(errorCode:Int,errorMsg:String)->Void)
+    class func download(url:String,progress:(bytesRead:Int64, totalBytesRead:Int64, totalBytesExpectedToRead:Int64)->Void,success:(savedPath:NSURL)->Void, failed:(error:NSError)->Void)
     {
         println("下载url:\(url)")
         
@@ -231,9 +264,9 @@ class BaseAPIManager: NSObject {
                 
             }).response({ (request, response, _, error) -> Void in
                 
-                if error != nil {
-                    println("下载文件失败: \(error)")
-                    failed(errorCode: CommonResponseMessage.network.rawValue, errorMsg: CommonResponseMessage.network.message())
+                if let e = error {
+                    println("下载文件失败: \(e)")
+                    failed(error: APIError(domain: APIErrorDomain, code: APIErrorMessage.NetworkError.rawValue, responseMessage: APIErrorMessage.NetworkError.getMessage()))
                 }else{
                     println("下载文件成功: \(savedPath)")
                     success(savedPath: savedPath)
@@ -241,7 +274,7 @@ class BaseAPIManager: NSObject {
             })
         }else{
             println("无网络连接")
-            failed(errorCode: CommonResponseMessage.network.rawValue, errorMsg: CommonResponseMessage.network.message())
+            failed(error: APIError(domain: APIErrorDomain, code: APIErrorMessage.NetworkError.rawValue, responseMessage: APIErrorMessage.NetworkError.getMessage()))
         }
     }
     
@@ -257,7 +290,7 @@ class BaseAPIManager: NSObject {
     :param: success        提交表单成功后的回调
     :param: failed         提交表单失败后的回调
     */
-    class func formSubmit(url:String, params:[String : AnyObject],fileParamName:String,filename:String, fileData:NSData, progress:(bytesWritten:Int64, totalBytesWritten:Int64, totalBytesExpectedToWrite:Int64)->Void,success:(responseData:[String : AnyObject]) -> Void, failed:(errorCode:Int,errorMsg:String)->Void)
+    class func formSubmit(url:String, params:[String : AnyObject],fileParamName:String,filename:String, fileData:NSData, progress:(bytesWritten:Int64, totalBytesWritten:Int64, totalBytesExpectedToWrite:Int64)->Void,success:(responseData:[String : AnyObject]) -> Void, failed:(error:NSError)->Void)
     {
         
         println("表单提交 : \(url) \n 参数:\(params)")
@@ -277,7 +310,7 @@ class BaseAPIManager: NSObject {
                     {
                         println("接口请求失败: \(e)")
                         
-                        failed(errorCode: CommonResponseMessage.network.rawValue, errorMsg: CommonResponseMessage.network.message())
+                        failed(error: APIError(domain: APIErrorDomain, code: APIErrorMessage.NetworkError.rawValue, responseMessage: APIErrorMessage.NetworkError.getMessage()))
                         
                     }else{
                         
@@ -287,20 +320,27 @@ class BaseAPIManager: NSObject {
                         
                         ret <-- responseData["ret"]
                         
-                        if ret == CommonResponseMessage.ok.rawValue
+                        if ret == ResponseStatusSuccess
                         {
                             success(responseData:responseData)
                             
                         }else{
-                            var msg: String?
+                            //错误消息
+                            var msg : String?
                             msg <-- responseData["msg"]
-                            failed(errorCode: ret!, errorMsg: msg!)
+                            var error : APIError!
+                            if let errorMessage = msg
+                            {
+                                error = APIError(domain: APIErrorDomain, code: ret!, responseMessage: errorMessage)
+                            }else{
+                                failed(error: APIError(domain: APIErrorDomain, code: ret!, responseMessage: nil))
+                            }
                         }
                     }
             }
         }else{
             println("无网络连接")
-            failed(errorCode: CommonResponseMessage.network.rawValue, errorMsg: CommonResponseMessage.network.message())
+            failed(error: APIError(domain: APIErrorDomain, code: APIErrorMessage.NetworkError.rawValue, responseMessage: APIErrorMessage.NetworkError.getMessage()))
         }
     }
     

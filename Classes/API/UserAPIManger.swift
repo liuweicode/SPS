@@ -18,7 +18,7 @@ class UserAPIManger : BaseAPIManager {
             "token": token
         ]
         
-        POST(getApiURL("/api/s/editaccount"), params: params, success: { (responseData) -> Void in
+        POST(Config.getApiURL("/api/s/editaccount"), params: params, success: { (responseData) -> Void in
             
             success()
             
