@@ -12,25 +12,20 @@ import Foundation
 class UserAPIManger : BaseAPIManager {
     
     // MARK:-  修改用户资料
-    class func api_s_editaccount(#uid:Int,token:String,user : User, success:()->Void, relogin:()->Void,failed:(errorCode:Int,errorMsg:String)->Void){
+    class func api_s_editaccount(#uid:Int,token:String, success:()->Void, relogin:()->Void,failed:(error:APIError)->Void){
+        
         var params: [String : AnyObject] = [
             "uid" : "\(uid)",
             "token": token
         ]
         
         POST(Config.getApiURL("/api/s/editaccount"), params: params, success: { (responseData) -> Void in
-            
             success()
-            
-        }) { (errorCode, errorMsg) -> Void in
-            
-            if errorCode == CommonResponseMessage.sign_token_error.rawValue {
-                relogin()
-            }else{
-                failed(errorCode: errorCode, errorMsg: errorMsg)
-            }
+        }, relogin: { () -> Void in
+            relogin()
+        }) { (error) -> Void in
+            failed(error: error)
         }
-        
     }
     
    
